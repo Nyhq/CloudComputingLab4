@@ -3,6 +3,8 @@ from azure.identity import AzureCliCredential
 from azure.mgmt.resource import ResourceManagementClient
 from azure.mgmt.network import NetworkManagementClient
 from azure.mgmt.compute import ComputeManagementClient
+from dotenv import load_dotenv
+load_dotenv()
 import os
 
 print(f"Provisioning a virtual machine...some operations might take a minute or two.")
@@ -13,43 +15,44 @@ credential = AzureCliCredential()
 # Retrieve subscription ID from environment variable.
 subscription_id = os.environ["AZURE_SUBSCRIPTION_ID"]
 
+
 # Step 1: Provision a resource group
 
 # Obtain the management object for resources, using the credentials from the CLI login.
 resource_client = ResourceManagementClient(credential, subscription_id)
 
-# Constants we need in multiple places: the resource group name, the region and the public mec location
-# in which we provision resources. Populate the variables with appropriate values. 
-RESOURCE_GROUP_NAME = "PythonAzureExample-VM-rg"
+# Constants we need in multiple places: the resource group name and the region
+# in which we provision resources. You can change these values however you want.
+RESOURCE_GROUP_NAME = "gamers"
 LOCATION = "westeurope"
-PUBLIC_MEC_LOCATION = "<edgezone id>"
-USERNAME = "azureuser"
-PASSWORD = "Libra123@"
+
 # Provision the resource group.
 rg_result = resource_client.resource_groups.create_or_update(RESOURCE_GROUP_NAME,
-   {
-       "location": LOCATION
-   }
+    {
+        "location": LOCATION
+    }
 )
+
 
 print(f"Provisioned resource group {rg_result.name} in the {rg_result.location} region")
 
-# For details on the previous code, see Example: Use the Azure libraries to provision a resource group
-# at https://learn.microsoft.com/azure/developer/python/azure-sdk-example-resource-group
+# For details on the previous code, see Example: Provision a resource group
+# at https://docs.microsoft.com/azure/developer/python/azure-sdk-example-resource-group
 
-# Step 2: Provision a virtual network
+
+# Step 2: provision a virtual network
 
 # A virtual machine requires a network interface client (NIC). A NIC requires
-# a virtual network and subnet along with an IP address. Therefore, we must provision
+# a virtual network and subnet along with an IP address. Therefore we must provision
 # these downstream components first, then provision the NIC, after which we
 # can provision the VM.
 
 # Network and IP address names
-VNET_NAME = "python-example-vnet-edge"
-SUBNET_NAME = "python-example-subnet-edge"
-IP_NAME = "python-example-ip-edge"
-IP_CONFIG_NAME = "python-example-ip-config-edge"
-NIC_NAME = "python-example-nic-edge"
+VNET_NAME = "CCpython-lab4-vnet"
+SUBNET_NAME = "CCpython-lab4-subnet"
+IP_NAME = "CCpython-lab4-ip"
+IP_CONFIG_NAME = "CCpython-lab4-ip-config"
+NIC_NAME = "CCpython-lab4-nic"
 
 # Obtain the management object for networks
 network_client = NetworkManagementClient(credential, subscription_id)
@@ -60,7 +63,7 @@ poller = network_client.virtual_networks.begin_create_or_update(RESOURCE_GROUP_N
     {
         "location": LOCATION,
         "address_space": {
-            "address_prefixes": ["10.1.0.0/16"]
+            "address_prefixes": ["10.0.0.0/16"]
         }
     }
 )
@@ -72,20 +75,18 @@ print(f"Provisioned virtual network {vnet_result.name} with address prefixes {vn
 # Step 3: Provision the subnet and wait for completion
 poller = network_client.subnets.begin_create_or_update(RESOURCE_GROUP_NAME, 
     VNET_NAME, SUBNET_NAME,
-    { "address_prefix": "10.1.0.0/24" }
+    { "address_prefix": "10.0.0.0/24" }
 )
 subnet_result = poller.result()
 
 print(f"Provisioned virtual subnet {subnet_result.name} with address prefix {subnet_result.address_prefix}")
 
 # Step 4: Provision an IP address and wait for completion
-# Only the standard public IP SKU is supported at EdgeZones
 poller = network_client.public_ip_addresses.begin_create_or_update(RESOURCE_GROUP_NAME,
     IP_NAME,
     {
         "location": LOCATION,
-        "extendedLocation": {"type": "EdgeZone", "name": PUBLIC_MEC_LOCATION},
-        "sku": { "name": "Standard" },
+        "sku": { "name": "Basic" },
         "public_ip_allocation_method": "Static",
         "public_ip_address_version" : "IPV4"
     }
@@ -100,7 +101,6 @@ poller = network_client.network_interfaces.begin_create_or_update(RESOURCE_GROUP
     NIC_NAME, 
     {
         "location": LOCATION,
-        "extendedLocation": {"type": "EdgeZone", "name": PUBLIC_MEC_LOCATION},
         "ip_configurations": [ {
             "name": IP_CONFIG_NAME,
             "subnet": { "id": subnet_result.id },
@@ -118,17 +118,19 @@ print(f"Provisioned network interface client {nic_result.name}")
 # Obtain the management object for virtual machines
 compute_client = ComputeManagementClient(credential, subscription_id)
 
-VM_NAME = "ExampleVM-edge"
+VM_NAME = "PythonLab4"
+USERNAME = "Nyhq"
+KEY_PATH = "/home/" + USERNAME + "/.ssh/authorized_keys"
+PUBLIC_KEY = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDl47TC90lNsKHalczef5RmQ96lW1OETmor+cWMgNT5xGf6i+ZhDAdtcnI7CIpEmfGliaagOepR597nnvg6IL7dKYr9W1McdQQ6StYsv/B5GnfLIVG+xf4IUdhSMdyhU23JWr51dgGZdmdEYD+SosPC1vvf8Ie+XPXTZ5YZEIMmErC3fBf/rLOnyTxAfrmefqei1VD+WkjopXb6a2N/LZDsMGumEkPhmpWz4J4d2jHjBAgmSWCpq2AGXivn51fP/nd62pokymMneavw9GEBKcz01Y6nEazES+xuf8rYd6+bSNHK5dAhxHKPsxRgxDOw6gyOaldq67iNfVGZ1LWwaHkr nyhq@DESKTOP-I8PR7QU"
 
 print(f"Provisioning virtual machine {VM_NAME}; this operation might take a few minutes.")
 
 # Provision the VM specifying only minimal arguments, which defaults to an Ubuntu 18.04 VM
-# on a Standard DSv2-series with a public IP address and a default virtual network/subnet.
+# on a Standard DS1 v2 plan with a public IP address and a default virtual network/subnet.
 
 poller = compute_client.virtual_machines.begin_create_or_update(RESOURCE_GROUP_NAME, VM_NAME,
     {
         "location": LOCATION,
-        "extendedLocation": {"type": "EdgeZone", "name": PUBLIC_MEC_LOCATION},
         "storage_profile": {
             "image_reference": {
                 "publisher": 'Canonical',
@@ -138,18 +140,30 @@ poller = compute_client.virtual_machines.begin_create_or_update(RESOURCE_GROUP_N
             }
         },
         "hardware_profile": {
-            "vm_size": "Standard_DS2_v2"
+            "vm_size": "Standard_DS1_v2"
         },
         "os_profile": {
             "computer_name": VM_NAME,
             "admin_username": USERNAME,
-            "admin_password": PASSWORD
+            "secrets": [
+                ],
+            "linuxConfiguration": {
+                "ssh": {
+                    "publicKeys": [
+                        {
+                            "path": KEY_PATH,
+                            "keyData": PUBLIC_KEY
+                        }
+                    ]
+                },
+                "disablePasswordAuthentication": True
+            }
         },
         "network_profile": {
             "network_interfaces": [{
                 "id": nic_result.id,
             }]
-        }
+        }        
     }
 )
 
